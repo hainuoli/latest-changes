@@ -1,0 +1,41 @@
+name: Deploy Production
+
+on:
+  release:
+    types:
+      - published
+
+permissions: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.FASTAPI_CLOUD_PRODUCTION_APP_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: .python-version
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "latest-known"
+          enable-cache: false
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Deploy
+        run: uv run fastapi deploy
+        env:
+          FASTAPI_CLOUD_APP_ID: ${{ vars.FASTAPI_CLOUD_PRODUCTION_APP_ID }}
+          FASTAPI_CLOUD_TOKEN: ${{ secrets.FASTAPI_CLOUD_PRODUCTION_TOKEN }}

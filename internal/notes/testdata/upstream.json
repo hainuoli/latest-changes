@@ -1,0 +1,267 @@
+[
+  {
+    "name": "empty",
+    "input": "# Release Notes\n\n## Latest Changes\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n"
+  },
+  {
+    "name": "history",
+    "input": "# Release Notes\n\n## Latest Changes\n\n## 0.1.0\n\nHistorical text.\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n\n## 0.1.0\n\nHistorical text.\n"
+  },
+  {
+    "name": "sections",
+    "input": "# Release Notes\n\n## Latest Changes\n\n### Docs\n\n* Existing docs.\n\n### Features\n\n* Existing feature.\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n* Existing feature.\n\n### Docs\n\n* Existing docs.\n"
+  },
+  {
+    "name": "uncategorized",
+    "input": "# Release Notes\n\n## Latest Changes\n\n* Legacy entry.\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n* Legacy entry.\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n"
+  },
+  {
+    "name": "mixed",
+    "input": "# Release Notes\n\n## Latest Changes\n\n* Legacy entry.\n\n### Fixes\n\n* Fix.\n\n## 0.1.0\n\nHistory.\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n* Legacy entry.\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n\n### Fixes\n\n* Fix.\n\n## 0.1.0\n\nHistory.\n"
+  },
+  {
+    "name": "crlf",
+    "input": "# Release Notes\r\n\r\n## Latest Changes\r\n\r\n### Features\r\n\r\n* Existing.\r\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n* Existing.\n"
+  },
+  {
+    "name": "missing-heading",
+    "input": "# Release Notes\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "error": true
+  },
+  {
+    "name": "unknown-section",
+    "input": "# Release Notes\n\n## Latest Changes\n\n### Unknown\n\n* Item.\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "error": true
+  },
+  {
+    "name": "duplicate-section",
+    "input": "# Release Notes\n\n## Latest Changes\n\n### Features\n\n* One.\n\n### Features\n\n* Two.\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "error": true
+  },
+  {
+    "name": "duplicate",
+    "input": "# Release Notes\n\n## Latest Changes\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n"
+  },
+  {
+    "name": "already-released",
+    "input": "# Release Notes\n\n## Latest Changes\n\n## 0.1.0\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        }
+      ]
+    },
+    "output": "# Release Notes\n\n## Latest Changes\n\n## 0.1.0\n\n### Features\n\n* ✨ Add routing support. PR [#42](https://github.com/hainuoli/mino/pull/42) by [@contributor](https://github.com/contributor).\n"
+  },
+  {
+    "name": "multiple",
+    "input": "# Release Notes\n\n## Latest Changes\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "feature"
+        },
+        {
+          "name": "docs"
+        }
+      ]
+    },
+    "error": true
+  },
+  {
+    "name": "none",
+    "input": "# Release Notes\n\n## Latest Changes\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": []
+    },
+    "error": true
+  },
+  {
+    "name": "release",
+    "input": "# Release Notes\n\n## Latest Changes\n",
+    "pull_request": {
+      "number": 42,
+      "title": "✨ Add routing support",
+      "html_url": "https://github.com/hainuoli/mino/pull/42",
+      "user": {
+        "login": "contributor",
+        "html_url": "https://github.com/contributor"
+      },
+      "labels": [
+        {
+          "name": "release"
+        }
+      ]
+    },
+    "error": true
+  }
+]

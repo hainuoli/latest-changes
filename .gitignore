@@ -1,0 +1,6 @@
+/data/
+/bin/
+/.env
+/coverage.out
+*.pem
+*.key
