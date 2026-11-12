@@ -7,8 +7,12 @@ branding:
 
 inputs:
   token:
-    description: Repository token with contents, pull requests, and commit statuses permissions
+    description: Workflow token for repository reads, pull request labels, and commit statuses
     required: true
+  notes-token:
+    description: Optional contents-write token for release-note commits; defaults to token
+    required: false
+    default: ''
   pull-request:
     description: Pull request number to recover through workflow_dispatch
     required: false
@@ -38,6 +42,7 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
+        LATEST_CHANGES_NOTES_TOKEN: ${{ inputs.notes-token }}
         LATEST_CHANGES_PULL_REQUEST: ${{ inputs.pull-request }}
         LATEST_CHANGES_BINARY: ${{ steps.build.outputs.binary }}
       run: '"$LATEST_CHANGES_BINARY"'

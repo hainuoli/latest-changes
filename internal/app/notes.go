@@ -79,7 +79,7 @@ func (s *Service) updateNotes(ctx context.Context, repo model.Repository, pr mod
 			return errors.New("updated release notes exceed size limit")
 		}
 
-		err = s.client.UpdateFile(ctx, repo, path, sha, title, updated)
+		err = s.writer.UpdateFile(ctx, repo, path, sha, title, updated)
 		if err == nil {
 			return nil
 		}

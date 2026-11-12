@@ -18,19 +18,55 @@ import (
 )
 
 func TestActionsEventToGitHubEndToEnd(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		notesToken string
+		status     int
+	}{
+		{
+			name:   "default-token",
+			status: http.StatusCreated,
+		},
+		{
+			name:       "separate-notes-token",
+			notesToken: "notes-token",
+			status:     http.StatusCreated,
+		},
+		{
+			name:       "denied-notes-token-does-not-fall-back",
+			notesToken: "notes-token",
+			status:     http.StatusForbidden,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testActionsEventToGitHub(t, tc.notesToken, tc.status)
+		})
+	}
+}
+
+func testActionsEventToGitHub(t *testing.T, notesToken string, writeStatus int) {
+	t.Helper()
 	event := fixture()
 	event.Action = "closed"
 	event.PullRequest.Labels = []model.Label{{Name: "feature"}}
 	var written struct {
-		Message string
-		Content string
-		SHA     string
-		Branch  string
+		Message           string
+		Content           string
+		SHA               string
+		Branch            string
+		Author, Committer struct {
+			Name  string
+			Email string
+		}
 	}
 	writeCount := 0
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer workflow-token" {
-			t.Error("missing workflow token")
+		wantToken := "workflow-token"
+		if r.Method == http.MethodPut && notesToken != "" {
+			wantToken = notesToken
+		}
+		if r.Header.Get("Authorization") != "Bearer "+wantToken {
+			t.Error("request used the wrong credential")
 		}
 		if r.Header.Get("X-GitHub-Api-Version") == "" {
 			t.Error("missing API version")
@@ -67,7 +103,7 @@ func TestActionsEventToGitHubEndToEnd(t *testing.T) {
 					t.Error(err)
 				}
 				writeCount++
-				w.WriteHeader(201)
+				w.WriteHeader(writeStatus)
 			} else {
 				t.Errorf("unexpected method %s", r.Method)
 				w.WriteHeader(405)
@@ -82,6 +118,13 @@ func TestActionsEventToGitHubEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	notesClient := client
+	if notesToken != "" {
+		notesClient, err = github.NewClient(notesToken, github.WithBaseURL(api.URL))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	path := filepath.Join(t.TempDir(), "event.json")
 	body, err := json.Marshal(event)
 	if err != nil {
@@ -95,12 +138,27 @@ func TestActionsEventToGitHubEndToEnd(t *testing.T) {
 		EventName:  "pull_request_target",
 		Repository: "owner/repo",
 	}
-	if err := NewRunner(client).Run(context.Background(), cfg); err != nil {
+	err = NewRunner(client, notesClient).Run(context.Background(), cfg)
+	if writeStatus == http.StatusForbidden {
+		if !github.HasStatus(err, writeStatus) || writeCount != 1 {
+			t.Fatalf("denied write was retried or did not return its error: writes=%d err=%v", writeCount, err)
+		}
+		return
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	content, err := base64.StdEncoding.DecodeString(written.Content)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, identity := range []struct {
+		Name  string
+		Email string
+	}{written.Author, written.Committer} {
+		if identity.Name != "github-actions[bot]" || identity.Email != "41898282+github-actions[bot]@users.noreply.github.com" {
+			t.Fatalf("commit was not attributed to the bot: %+v", identity)
+		}
 	}
 	if writeCount != 1 || written.Message != "📝 Refresh release notes" || strings.ContainsAny(written.Message, "\r\n") || written.SHA != "initial-sha" || written.Branch != "main" || !strings.Contains(string(content), "PR [#1]") {
 		t.Fatalf("unexpected write: %+v", written)
@@ -192,7 +250,7 @@ func TestRejectUntrustedEventRepository(t *testing.T) {
 				EventName:  "pull_request_target",
 				Repository: "owner/repo",
 			}
-			if err := NewRunner(client).Run(context.Background(), cfg); err == nil {
+			if err := NewRunner(client, client).Run(context.Background(), cfg); err == nil {
 				t.Fatal("accepted an untrusted event")
 			}
 			if calls != tc.apiCalls {
@@ -234,6 +292,13 @@ func TestManualRecovery(t *testing.T) {
 			pr.Labels = []model.Label{{Name: "bug"}}
 			statuses, writes := 0, 0
 			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				wantToken := "workflow-token"
+				if r.Method == http.MethodPut {
+					wantToken = "notes-token"
+				}
+				if r.Header.Get("Authorization") != "Bearer "+wantToken {
+					t.Error("manual recovery used the wrong credential")
+				}
 				switch r.URL.Path {
 				case "/repos/owner/repo":
 					json.NewEncoder(w).Encode(event.Repository)
@@ -263,6 +328,10 @@ func TestManualRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			notesClient, err := github.NewClient("notes-token", github.WithBaseURL(api.URL))
+			if err != nil {
+				t.Fatal(err)
+			}
 			path := filepath.Join(t.TempDir(), "event.json")
 			body, err := json.Marshal(map[string]any{"repository": event.Repository})
 			if err != nil {
@@ -277,7 +346,7 @@ func TestManualRecovery(t *testing.T) {
 				Repository:  "owner/repo",
 				PullRequest: 1,
 			}
-			if err := NewRunner(client).Run(context.Background(), cfg); err != nil {
+			if err := NewRunner(client, notesClient).Run(context.Background(), cfg); err != nil {
 				t.Fatal(err)
 			}
 			if statuses != tc.wantStatus || writes != tc.wantWrites {
@@ -357,6 +426,10 @@ func TestActionsClassifyDocumentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	notesClient, err := github.NewClient("notes-token", github.WithBaseURL(api.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(t.TempDir(), "event.json")
 	body, err := json.Marshal(event)
 	if err != nil {
@@ -370,7 +443,7 @@ func TestActionsClassifyDocumentation(t *testing.T) {
 		EventName:  "pull_request_target",
 		Repository: "owner/repo",
 	}
-	if err := NewRunner(client).Run(context.Background(), cfg); err != nil {
+	if err := NewRunner(client, notesClient).Run(context.Background(), cfg); err != nil {
 		t.Fatal(err)
 	}
 	if statusWrites != 1 || len(current.Labels) != 1 || current.Labels[0].Name != "docs" {

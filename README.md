@@ -3,8 +3,9 @@
 A GitHub Action written in Go. It classifies pull requests, reports
 `latest-changes/label`, and updates release notes after merges. Release-note
 commits contain a single Gitmoji title with no body, trailers, or `[skip ci]`.
-No server, webhook, App registration, private key, or personal access token is
-required. The default identity is `github-actions[bot]`.
+The default setup uses the job's `GITHUB_TOKEN`, without a server, webhook,
+App registration, or private key. Protected branches can use a separate
+release-note token. Commit author and committer are `github-actions[bot]`.
 
 The behavior is adapted from
 [tiangolo/latest-changes-app](https://github.com/tiangolo/latest-changes-app).
@@ -50,16 +51,57 @@ PRs update notes, and closed unmerged PRs are skipped.
 
 `latest-changes/label` is the required classification status; the workflow job's
 completion alone does not mean a category has been selected. Require this status
-from GitHub Actions only after a successful demo. `GITHUB_TOKEN` cannot bypass
-branch rules that prohibit direct file updates. If your default branch requires
-all changes to go through PRs, this direct-write version needs a separately
-approved authentication or PR-based update design; do not weaken protection as
-part of setup.
+from GitHub Actions only after a successful demo. Branch rules can block direct
+file updates with `GITHUB_TOKEN`; see the protected-branch setup below.
 
 Disable the old Latest Changes App for the target repository before enabling
 this workflow, so only one implementation manages its labels and release notes.
 Remove its old ruleset bypass and status source when completing the migration.
 Keep the shared path-rule configuration below.
+
+## Protected branches
+
+If the default branch requires PRs or status checks, pass a separate credential
+through `notes-token`. For example, create a fine-grained personal access token
+owned by a repository admin who already has **Always allow** ruleset bypass.
+Limit repository access to the target repository, grant only **Contents: Read
+and write**, and choose an expiration date. The token does not create bypass
+rights: its owner must already be allowed to write directly to the branch.
+
+Store it as the repository Actions secret `LATEST_CHANGES_TOKEN`. Do not put
+the token in workflow source or logs. Then use:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+```
+
+Inside the existing job's steps, pin the action to a reviewed full commit SHA:
+
+```yaml
+- uses: hainuoli/latest-changes@main
+  with:
+    token: ${{ secrets.GITHUB_TOKEN }}
+    notes-token: ${{ secrets.LATEST_CHANGES_TOKEN }}
+    pull-request: ${{ inputs.pull-request }}
+```
+
+`token` handles repository reads, PR metadata, labels, and commit statuses.
+`notes-token` is used only for the release-note file update. Keeping the default
+workflow token for classification preserves GitHub Actions as the source of
+`latest-changes/label`. If `notes-token` is omitted or empty, file updates use
+`token`, preserving the default setup. A denied notes-token write fails without
+falling back to the workflow token.
+
+The action explicitly sets both commit author and committer to
+`github-actions[bot]` with email
+`41898282+github-actions[bot]@users.noreply.github.com`. GitHub still authorizes
+and audits the write as the token owner. A Contents-write PAT is scoped to a
+repository, not just the release-note file. Renew the stored secret before its
+expiration; no App or ruleset change is required when the owner's bypass is
+already configured.
 
 ## Repository configuration
 
@@ -201,8 +243,11 @@ no local queue or persistent service to maintain.
 The default `GITHUB_TOKEN` does not trigger new push workflows for release-note
 commits, so `[skip ci]` is unnecessary. Label changes made with this token also
 do not start additional labeled/unlabeled workflow runs; the action computes
-the final classification status in the same run. An optional custom `token`
-may change these triggering behaviors and must have the same permissions.
+the final classification status in the same run. A PAT supplied as `notes-token`
+can trigger push workflows for release-note commits. Label and status operations
+still use `token`; changing that input to a custom credential may also change
+their triggering behavior and required-status source. Commits remain title-only,
+without `[skip ci]`, regardless of the supplied credential.
 
 Existing release notes and SHA-conflict retries make reruns idempotent. A
 canceled, failed, or queue-rejected run must be rerun manually; this action does
@@ -224,11 +269,13 @@ For local execution, set `GITHUB_TOKEN`, `GITHUB_REPOSITORY`,
 `GITHUB_EVENT_NAME`, and `GITHUB_EVENT_PATH` to a saved event JSON file.
 Supported events are `pull_request`, `pull_request_target`, and
 `workflow_dispatch`; the last also requires `LATEST_CHANGES_PULL_REQUEST`.
+Set `LATEST_CHANGES_NOTES_TOKEN` to use a separate file-update credential.
 Local execution with a real token can write to GitHub. Tests use only local
 mock servers and temporary event files and do not require live credentials.
 
 Tests cover the Actions-to-mock-GitHub flow, recovery, repository identity
-checks, title and path label selection, manual overrides, current-head statuses,
+checks, credential separation, bot commit metadata, denied-write propagation,
+title and path label selection, manual overrides, current-head statuses,
 file pagination, conflicts, reruns, and title-only commits. Rendering is checked against 14 upstream golden
 outputs. Production dependencies are limited to YAML parsing and recursive
 path matching. HTTP and JSON use the Go standard library.

@@ -11,6 +11,7 @@ import (
 // Config contains the GitHub Actions environment for a single run.
 type Config struct {
 	Token       string
+	NotesToken  string
 	EventPath   string
 	EventName   string
 	Repository  string
@@ -21,6 +22,7 @@ type Config struct {
 func Load() (Config, error) {
 	c := Config{
 		Token:      os.Getenv("GITHUB_TOKEN"),
+		NotesToken: os.Getenv("LATEST_CHANGES_NOTES_TOKEN"),
 		EventPath:  os.Getenv("GITHUB_EVENT_PATH"),
 		EventName:  os.Getenv("GITHUB_EVENT_NAME"),
 		Repository: os.Getenv("GITHUB_REPOSITORY"),

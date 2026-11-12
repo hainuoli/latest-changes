@@ -31,11 +31,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	notesClient := client
+	if cfg.NotesToken != "" {
+		notesClient, err = github.NewClient(cfg.NotesToken)
+		if err != nil {
+			return err
+		}
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
 
-	return action.NewRunner(client).Run(ctx, cfg)
+	return action.NewRunner(client, notesClient).Run(ctx, cfg)
 }

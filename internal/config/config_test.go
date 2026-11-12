@@ -67,6 +67,7 @@ func TestLoad(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITHUB_TOKEN", "workflow-token")
+			t.Setenv("LATEST_CHANGES_NOTES_TOKEN", "")
 			t.Setenv("GITHUB_EVENT_PATH", "/tmp/event.json")
 			t.Setenv("GITHUB_EVENT_NAME", tc.event)
 			t.Setenv("GITHUB_REPOSITORY", tc.repository)
@@ -86,6 +87,7 @@ func TestMissingRunnerEnvironment(t *testing.T) {
 	for _, missing := range []string{"GITHUB_TOKEN", "GITHUB_EVENT_PATH", "GITHUB_REPOSITORY"} {
 		t.Run(missing, func(t *testing.T) {
 			t.Setenv("GITHUB_TOKEN", "workflow-token")
+			t.Setenv("LATEST_CHANGES_NOTES_TOKEN", "")
 			t.Setenv("GITHUB_EVENT_PATH", "/tmp/event.json")
 			t.Setenv("GITHUB_EVENT_NAME", "pull_request_target")
 			t.Setenv("GITHUB_REPOSITORY", "owner/repo")
@@ -93,6 +95,27 @@ func TestMissingRunnerEnvironment(t *testing.T) {
 			t.Setenv(missing, "")
 			if _, err := Load(); err == nil {
 				t.Fatal("accepted missing runner environment")
+			}
+		})
+	}
+}
+
+func TestLoadNotesToken(t *testing.T) {
+	for _, token := range []string{"", "notes-token"} {
+		t.Run(token, func(t *testing.T) {
+			t.Setenv("GITHUB_TOKEN", "workflow-token")
+			t.Setenv("LATEST_CHANGES_NOTES_TOKEN", token)
+			t.Setenv("GITHUB_EVENT_PATH", "/tmp/event.json")
+			t.Setenv("GITHUB_EVENT_NAME", "pull_request_target")
+			t.Setenv("GITHUB_REPOSITORY", "owner/repo")
+			t.Setenv("LATEST_CHANGES_PULL_REQUEST", "")
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Token != "workflow-token" || cfg.NotesToken != token {
+				t.Fatal("workflow and notes credentials were not kept separate")
 			}
 		})
 	}

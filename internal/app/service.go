@@ -15,19 +15,25 @@ type (
 		AddLabel(ctx context.Context, repo model.Repository, number int, label string) error
 		RemoveLabel(ctx context.Context, repo model.Repository, number int, label string) error
 		SetStatus(ctx context.Context, repo model.Repository, sha, state, description string) error
+	}
+
+	notesWriter interface {
 		UpdateFile(ctx context.Context, repo model.Repository, path, sha, title, content string) error
 	}
 
 	// Service handles labels and release notes for the workflow repository.
 	Service struct {
 		client githubClient
+		writer notesWriter
 	}
 )
 
-// NewService creates a service backed by the given GitHub client.
-func NewService(client githubClient) *Service {
+// NewService uses the workflow client for reads, labels, and statuses.
+// Only release-note file updates use the writer's credentials.
+func NewService(client githubClient, writer notesWriter) *Service {
 	return &Service{
 		client: client,
+		writer: writer,
 	}
 }
 

@@ -19,13 +19,15 @@ const maxEventSize = 25_000_000
 
 // Runner processes one Actions event using trusted repository metadata.
 type Runner struct {
-	client *github.Client
+	client      *github.Client
+	notesClient *github.Client
 }
 
-// NewRunner creates a single-run processor backed by the GitHub API.
-func NewRunner(client *github.Client) *Runner {
+// NewRunner creates a processor with separate workflow and release-note clients.
+func NewRunner(client, notesClient *github.Client) *Runner {
 	return &Runner{
-		client: client,
+		client:      client,
+		notesClient: notesClient,
 	}
 }
 
@@ -59,7 +61,7 @@ func (r *Runner) Run(ctx context.Context, cfg config.Config) error {
 		}
 	}
 
-	if err := app.NewService(r.client).ProcessEvent(ctx, event); err != nil {
+	if err := app.NewService(r.client, r.notesClient).ProcessEvent(ctx, event); err != nil {
 		return err
 	}
 	slog.Info("Latest Changes completed", "repository", repo.FullName,

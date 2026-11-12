@@ -31,4 +31,6 @@ jobs:
       - uses: hainuoli/latest-changes@main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # For protected branches, see the README and set a contents-write PAT:
+          # notes-token: ${{ secrets.LATEST_CHANGES_TOKEN }}
           pull-request: ${{ inputs.pull-request }}

@@ -12,16 +12,22 @@ import (
 	"github.com/hainuoli/latest-changes/internal/model"
 )
 
-// File contains a GitHub Contents API file response.
+type (
+	// File contains a GitHub Contents API file response.
+	File struct {
+		Type     string `json:"type"`
+		Path     string `json:"path"`
+		SHA      string `json:"sha"`
+		Size     int    `json:"size"`
+		Encoding string `json:"encoding"`
+		Content  string `json:"content"`
+	}
 
-type File struct {
-	Type     string `json:"type"`
-	Path     string `json:"path"`
-	SHA      string `json:"sha"`
-	Size     int    `json:"size"`
-	Encoding string `json:"encoding"`
-	Content  string `json:"content"`
-}
+	commitIdentity struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+)
 
 // GetRepository resolves the workflow repository and its current default branch.
 func (c *Client) GetRepository(ctx context.Context, fullName string) (model.Repository, error) {
@@ -55,14 +61,27 @@ func (c *Client) GetFile(ctx context.Context, repo model.Repository, path, ref s
 }
 
 // UpdateFile writes release notes using the expected blob SHA.
+// Commit metadata stays attributed to the bot regardless of the token owner;
+// GitHub still authorizes and audits the write using the authenticated identity.
 func (c *Client) UpdateFile(ctx context.Context, repo model.Repository, path, sha, title, content string) error {
-	payload := map[string]string{
-		"message": title,
-		"content": base64.StdEncoding.EncodeToString([]byte(content)),
-		"branch":  repo.DefaultBranch,
+	identity := commitIdentity{
+		Name:  "github-actions[bot]",
+		Email: "41898282+github-actions[bot]@users.noreply.github.com",
 	}
-	if sha != "" {
-		payload["sha"] = sha
+	payload := struct {
+		Message   string         `json:"message"`
+		Content   string         `json:"content"`
+		Branch    string         `json:"branch"`
+		SHA       string         `json:"sha,omitempty"`
+		Author    commitIdentity `json:"author"`
+		Committer commitIdentity `json:"committer"`
+	}{
+		Message:   title,
+		Content:   base64.StdEncoding.EncodeToString([]byte(content)),
+		Branch:    repo.DefaultBranch,
+		SHA:       sha,
+		Author:    identity,
+		Committer: identity,
 	}
 	return c.request(ctx, "PUT", repoPath(repo)+"/contents/"+escapePath(path), payload, nil)
 }

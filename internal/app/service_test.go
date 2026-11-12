@@ -206,7 +206,7 @@ func TestLabelProcessing(t *testing.T) {
 				fileErr:    tc.fileErr,
 				changeHead: tc.changeHead,
 			}
-			if err := (NewService(fake)).ProcessEvent(context.Background(), event); err != nil {
+			if err := (NewService(fake, fake)).ProcessEvent(context.Background(), event); err != nil {
 				t.Fatal(err)
 			}
 			if fake.status != tc.state {
@@ -366,7 +366,7 @@ func TestTitleLabelProcessing(t *testing.T) {
 				fileErr:    tc.fileErr,
 				changeHead: tc.changeHead,
 			}
-			if err := NewService(fake).ProcessEvent(context.Background(), event); err != nil {
+			if err := NewService(fake, fake).ProcessEvent(context.Background(), event); err != nil {
 				t.Fatal(err)
 			}
 			state, description := "success", "Latest Changes label: "+tc.want
@@ -397,7 +397,7 @@ func TestMergedUpdatesRetryWithoutBodyAndPreserveConcurrentChanges(t *testing.T)
 		conflict: true,
 		config:   "auto-labels: {}\ncommit-title: '📝 Refresh release notes'\n",
 	}
-	service := NewService(fake)
+	service := NewService(fake, fake)
 	if err := service.ProcessEvent(context.Background(), event); err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestSkipReleaseAndUnmergedAndOtherBranch(t *testing.T) {
 				event.Action = "assigned"
 			}
 			fake := &fakeGitHub{pr: event.PullRequest}
-			if err := (NewService(fake)).ProcessEvent(context.Background(), event); err != nil {
+			if err := (NewService(fake, fake)).ProcessEvent(context.Background(), event); err != nil {
 				t.Fatal(err)
 			}
 			if fake.writes != 0 {
@@ -448,7 +448,7 @@ func TestCreateMissingNotesAndRejectBodyConfiguration(t *testing.T) {
 	event.Action = "closed"
 	event.PullRequest.Labels = []model.Label{{Name: "bug"}}
 	fake := &fakeGitHub{pr: event.PullRequest}
-	if err := (NewService(fake)).ProcessEvent(context.Background(), event); err != nil {
+	if err := (NewService(fake, fake)).ProcessEvent(context.Background(), event); err != nil {
 		t.Fatal(err)
 	}
 	if fake.writes != 1 || fake.message != notes.DefaultCommitTitle {
@@ -458,7 +458,7 @@ func TestCreateMissingNotesAndRejectBodyConfiguration(t *testing.T) {
 		pr:     event.PullRequest,
 		config: "auto-labels: {}\ncommit-title: |\n  📝 Update notes\n\n  Body\n",
 	}
-	if err := (NewService(fake)).ProcessEvent(context.Background(), event); err == nil {
+	if err := (NewService(fake, fake)).ProcessEvent(context.Background(), event); err == nil {
 		t.Fatal("accepted commit body")
 	}
 	if fake.writes != 0 {
