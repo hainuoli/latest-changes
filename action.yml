@@ -1,0 +1,43 @@
+name: Latest Changes
+author: hainuoli
+description: Classify pull requests and update release notes with title-only Gitmoji commits
+branding:
+  icon: file-text
+  color: blue
+
+inputs:
+  token:
+    description: Repository token with contents, pull requests, and commit statuses permissions
+    required: true
+  pull-request:
+    description: Pull request number to recover through workflow_dispatch
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      with:
+        go-version: stable
+        cache: false
+    - name: Build Latest Changes
+      id: build
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        GOWORK: 'off'
+        GOTOOLCHAIN: local
+      run: |
+        set -euo pipefail
+        build_dir=$(mktemp -d "$RUNNER_TEMP/latest-changes.XXXXXX")
+        go build -mod=readonly -trimpath -o "$build_dir/latest-changes" ./cmd/latest-changes
+        echo "binary=$build_dir/latest-changes" >> "$GITHUB_OUTPUT"
+    - name: Process pull request
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        LATEST_CHANGES_PULL_REQUEST: ${{ inputs.pull-request }}
+        LATEST_CHANGES_BINARY: ${{ steps.build.outputs.binary }}
+      run: '"$LATEST_CHANGES_BINARY"'
