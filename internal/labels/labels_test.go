@@ -63,6 +63,7 @@ func TestRejectInvalidConfiguration(t *testing.T) {
 		"auto-labels:\n  docs: [42]", "auto-labels:\n  docs: ['']", "auto-labels:\n  docs: ['[']", "auto-labels:\n  docs: [{exclude: docs/**, extra: true}]",
 		"auto-labels: {}\ncommit-title: |\n  📝 Update notes\n\n  Body",
 		"auto-labels: {}\nauto-labels: {}", strings.Repeat(" ", 100001),
+		"auto-labels: {}\nlabel-from-title: not-a-bool",
 	} {
 		t.Run(input[:min(len(input), 60)], func(t *testing.T) {
 			if _, err := ParseConfig([]byte(input)); err == nil {
@@ -97,6 +98,8 @@ func TestSelectionPreservesManualAndRelease(t *testing.T) {
 		want      string
 	}{
 		{[]model.Label{{Name: "bug"}}, "bug", "docs", "bug"},
+		{[]model.Label{{Name: "feature"}, {Name: "bug"}}, "bug", "docs", "bug"},
+		{[]model.Label{{Name: "feature"}}, "bug", "", "feature"},
 		{[]model.Label{{Name: "docs"}}, "", "bug", "bug"},
 		{[]model.Label{{Name: "bug"}}, "", "docs", "bug"},
 		{[]model.Label{{Name: "release"}, {Name: "bug"}}, "", "feature", "release"},
@@ -104,6 +107,69 @@ func TestSelectionPreservesManualAndRelease(t *testing.T) {
 	} {
 		if got := SelectLabel(tc.existing, tc.explicit, tc.candidate); got != tc.want {
 			t.Errorf("got %s want %s", got, tc.want)
+		}
+	}
+}
+
+func TestLabelFromTitle(t *testing.T) {
+	for _, tc := range []struct {
+		title string
+		want  string
+	}{
+		{"✨ Add JSON codec and helpers", "feature"},
+		{"🐛 Fix decoding", "bug"},
+		{"💥 Remove legacy API", "breaking"},
+		{"🔒 Fix disclosure", "security"},
+		{"🔒️ Fix disclosure", "security"},
+		{"📝 Update guide", "docs"},
+		{"✏ Fix typo", "docs"},
+		{"✏️ Fix typo", "docs"},
+		{"🌐 Translate guide", "lang-all"},
+		{"⬆ Upgrade dependencies", "upgrade"},
+		{"⬆️ Upgrade dependencies", "upgrade"},
+		{"♻ Refactor decoder", "refactor"},
+		{"♻️ Refactor decoder", "refactor"},
+		{"🎨 Reorganize helpers", "refactor"},
+		{"⚡ Improve encoding", "refactor"},
+		{"⚡️ Improve encoding", "refactor"},
+		{"🔥 Remove unused code", "refactor"},
+		{"👷 Update CI", "internal"},
+		{"🔧 Update configuration", "internal"},
+		{"🔨 Update scripts", "internal"},
+		{"🚨 Fix linter warnings", "internal"},
+		{"✅ Add tests", "internal"},
+		{"🔖 Prepare release", "release"},
+		{"🎉 Initialize project", ""},
+		{"⬇ Downgrade dependency", ""},
+		{"📄 Update license", ""},
+		{"🙈 Update ignored paths", ""},
+		{"feat: Add JSON codec", ""},
+		{"✨ add JSON codec", ""},
+		{"✨ Add JSON codec.", ""},
+		{"✨ Add JSON codec\nBody", ""},
+		{"✨ " + strings.Repeat("A", 71), ""},
+		{"", ""},
+	} {
+		t.Run(tc.title, func(t *testing.T) {
+			if got := LabelFromTitle(tc.title); got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTitleClassificationIsOptIn(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		input := "auto-labels: {}\n"
+		if enabled {
+			input += "label-from-title: true\n"
+		}
+		cfg, err := ParseConfig([]byte(input))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.LabelFromTitle != enabled {
+			t.Fatalf("got %v want %v", cfg.LabelFromTitle, enabled)
 		}
 	}
 }

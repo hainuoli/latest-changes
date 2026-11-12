@@ -67,6 +67,7 @@ Add `.github/latest-changes.yml` to each managed repository:
 
 ```yaml
 commit-title: "📝 Update release notes"
+label-from-title: true
 auto-labels:
   docs:
     - docs/**
@@ -91,10 +92,44 @@ rejected. No body, trailers, or `[skip ci]` is added. The supported emoji are
 ✨ 🐛 💥 🔒 📝 ✏ 🌐 ⬆ ⬇ ♻ 🎨 ⚡ 🔥 👷 🔧 🔨 🚨 ✅ 🔖 🎉 📄 🙈,
 with an optional trailing variation selector.
 
-The official hosted App does not support `commit-title`; disable the old App
-before adding it. A configuration file must contain an `auto-labels` mapping;
-use `auto-labels: {}` for manual classification. With no configuration file,
-the action checks manual labels and uses the default commit title.
+The official hosted App does not support `commit-title` or `label-from-title`;
+disable the old App before adding them. A configuration file must contain an
+`auto-labels` mapping. With no configuration file, the action checks manual
+labels and uses the default commit title.
+
+`label-from-title` is optional and defaults to `false`, preserving existing
+path-based behavior. Set it to `true` to classify unlabelled PRs from their
+Gitmoji titles, including source-code changes. Titles use the same format and
+72-character limit as `commit-title`. They are read as data, never executed.
+
+| Prefix | Label |
+| --- | --- |
+| ✨ | `feature` |
+| 🐛 | `bug` |
+| 💥 | `breaking` |
+| 🔒 | `security` |
+| 📝, ✏ | `docs` |
+| 🌐 | `lang-all` |
+| ⬆ | `upgrade` |
+| ♻, 🎨, ⚡, 🔥 | `refactor` |
+| 👷, 🔧, 🔨, 🚨, ✅ | `internal` |
+| 🔖 | `release` |
+
+An optional trailing emoji variation selector is accepted. Other supported
+prefixes (⬇, 🎉, 📄, 🙈) have no title mapping and fall back to path rules.
+
+With title classification enabled, an existing category takes precedence;
+otherwise the title is tried before path rules. Adding a recognized label
+manually replaces the previous category, while unrelated labels are preserved.
+Later title edits and pushes keep the selected category, since an existing
+label may have been chosen manually. To change an already classified PR's
+category, add the desired category label; changing only its title does not
+replace the label. An unclassified PR can also be classified on `edited`,
+`reopened`, `labeled`, or `unlabeled` events when its current title maps to a
+category. Removing the last category may therefore reapply the title category.
+
+Use `auto-labels: {}` to disable path classification. To use only manual
+classification, also leave `label-from-title` disabled.
 
 Path rules match repository-relative POSIX paths, including recursive `**`.
 Rules are ordered; the first matching rule for a label wins. For example:
@@ -106,10 +141,11 @@ auto-labels:
     - docs/**
 ```
 
-Every changed path must be classified for automatic selection, including both
-paths of a rename. Mixed source and documentation changes wait for a manual
-category. Automatic selection runs on `opened` and `synchronize`; label changes
-respect manual selection. New commits may promote a category by priority.
+Path-based selection requires every changed path to be classified, including
+both paths of a rename. Mixed source and documentation changes wait for a
+manual category unless title classification selects one. Path selection runs
+on `opened` and `synchronize`; label changes respect manual selection. With
+title classification disabled, new commits may promote a category by priority.
 Other labels such as `help wanted` are preserved.
 
 Supported categories in precedence and output order:
@@ -192,8 +228,8 @@ Local execution with a real token can write to GitHub. Tests use only local
 mock servers and temporary event files and do not require live credentials.
 
 Tests cover the Actions-to-mock-GitHub flow, recovery, repository identity
-checks, label selection, current-head statuses, file pagination, conflicts,
-reruns, and title-only commits. Rendering is checked against 14 upstream golden
+checks, title and path label selection, manual overrides, current-head statuses,
+file pagination, conflicts, reruns, and title-only commits. Rendering is checked against 14 upstream golden
 outputs. Production dependencies are limited to YAML parsing and recursive
 path matching. HTTP and JSON use the Go standard library.
 

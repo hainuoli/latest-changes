@@ -16,10 +16,11 @@ import (
 )
 
 type (
-	// Config contains path rules and the single-line automation commit title.
+	// Config contains automatic label rules and the single-line automation commit title.
 	Config struct {
-		AutoLabels  map[string][]Rule `yaml:"auto-labels"`
-		CommitTitle string            `yaml:"commit-title"`
+		AutoLabels     map[string][]Rule `yaml:"auto-labels"`
+		CommitTitle    string            `yaml:"commit-title"`
+		LabelFromTitle bool              `yaml:"label-from-title"`
 	}
 
 	// Rule includes or excludes a path using first-match precedence.
@@ -69,6 +70,40 @@ func ValidateCommitTitle(title string) error {
 		return errors.New("commit-title requires a supported Gitmoji and capitalized subject without a trailing period")
 	}
 	return nil
+}
+
+// LabelFromTitle maps a valid Gitmoji title to a release-note category.
+// Supported prefixes without a category return an empty string.
+func LabelFromTitle(title string) string {
+	if err := ValidateCommitTitle(title); err != nil {
+		return ""
+	}
+
+	emoji, _, _ := strings.Cut(title, " ")
+	switch strings.TrimSuffix(emoji, "\ufe0f") {
+	case "✨":
+		return "feature"
+	case "🐛":
+		return "bug"
+	case "💥":
+		return "breaking"
+	case "🔒":
+		return "security"
+	case "📝", "✏":
+		return "docs"
+	case "🌐":
+		return "lang-all"
+	case "⬆":
+		return "upgrade"
+	case "♻", "🎨", "⚡", "🔥":
+		return "refactor"
+	case "👷", "🔧", "🔨", "🚨", "✅":
+		return "internal"
+	case "🔖":
+		return "release"
+	default:
+		return ""
+	}
 }
 
 // ParseConfig validates a single repository configuration document.
@@ -141,8 +176,10 @@ func (c Config) SelectCandidate(files []model.ChangedFile) string {
 // SelectLabel preserves manual choices and otherwise applies category precedence.
 func SelectLabel(existing []model.Label, explicit, candidate string) string {
 	matching := notes.RecognizedLabels(existing)
-	if len(matching) == 1 && matching[0] == explicit {
-		return explicit
+	for _, label := range matching {
+		if label == explicit {
+			return explicit
+		}
 	}
 	set := map[string]bool{}
 	for _, label := range matching {

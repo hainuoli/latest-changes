@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,6 +20,7 @@ type fakeGitHub struct {
 	sha         string
 	files       []model.ChangedFile
 	fileErr     error
+	fileReads   int
 	status      string
 	stateSHA    string
 	description string
@@ -69,6 +71,7 @@ func (f *fakeGitHub) GetPullRequest(context.Context, model.Repository, int) (mod
 }
 
 func (f *fakeGitHub) GetPullRequestFiles(context.Context, model.Repository, model.PullRequest) ([]model.ChangedFile, error) {
+	f.fileReads++
 	return f.files, f.fileErr
 }
 
@@ -217,6 +220,167 @@ func TestLabelProcessing(t *testing.T) {
 			}
 			if tc.name == "manual" && (len(fake.added) > 0 || len(fake.removed) > 0) {
 				t.Fatal("changed manual label")
+			}
+		})
+	}
+}
+
+func TestTitleLabelProcessing(t *testing.T) {
+	config := "label-from-title: true\nauto-labels:\n  docs: [docs/**]\n"
+	for _, tc := range []struct {
+		name       string
+		action     string
+		title      string
+		existing   []model.Label
+		explicit   string
+		files      []model.ChangedFile
+		fileErr    error
+		want       string
+		added      []string
+		removed    []string
+		fileReads  int
+		changeHead bool
+	}{
+		{
+			name:    "source-feature",
+			action:  "opened",
+			title:   "✨ Add JSON codec and helpers",
+			fileErr: errors.New("file API unavailable"),
+			want:    "feature",
+			added:   []string{"feature"},
+		},
+		{
+			name:   "title-before-path",
+			action: "opened",
+			title:  "🐛 Fix documentation examples",
+			files:  []model.ChangedFile{{Name: "docs/index.md"}},
+			want:   "bug",
+			added:  []string{"bug"},
+		},
+		{
+			name:     "manual-category-survives-push",
+			action:   "synchronize",
+			title:    "✨ Add feature",
+			existing: []model.Label{{Name: "bug"}},
+			fileErr:  errors.New("file API unavailable"),
+			want:     "bug",
+		},
+		{
+			name:     "manual-category-survives-edit",
+			action:   "edited",
+			title:    "✨ Add feature",
+			existing: []model.Label{{Name: "bug"}},
+			want:     "bug",
+		},
+		{
+			name:     "explicit-label-overrides-existing-category",
+			action:   "labeled",
+			title:    "✨ Add feature",
+			existing: []model.Label{{Name: "feature"}, {Name: "bug"}, {Name: "help wanted"}},
+			explicit: "bug",
+			want:     "bug",
+			removed:  []string{"feature"},
+		},
+		{
+			name:     "stale-label-event-does-not-restore-removed-category",
+			action:   "labeled",
+			title:    "✨ Add feature",
+			existing: []model.Label{{Name: "feature"}},
+			explicit: "bug",
+			want:     "feature",
+		},
+		{
+			name:     "release-override",
+			action:   "synchronize",
+			title:    "✨ Add feature",
+			existing: []model.Label{{Name: "release"}},
+			want:     "release",
+		},
+		{
+			name:     "unrelated-label-is-preserved",
+			action:   "opened",
+			title:    "✨ Add feature",
+			existing: []model.Label{{Name: "help wanted"}},
+			want:     "feature",
+			added:    []string{"feature"},
+		},
+		{
+			name:   "edited-unclassified-title",
+			action: "edited",
+			title:  "🐛 Fix decoding",
+			want:   "bug",
+			added:  []string{"bug"},
+		},
+		{
+			name:   "reopened-unclassified-title",
+			action: "reopened",
+			title:  "✨ Add feature",
+			want:   "feature",
+			added:  []string{"feature"},
+		},
+		{
+			name:   "release-title",
+			action: "opened",
+			title:  "🔖 Prepare release",
+			want:   "release",
+			added:  []string{"release"},
+		},
+		{
+			name:      "unmapped-title-falls-back-to-path",
+			action:    "opened",
+			title:     "🎉 Initialize guide",
+			files:     []model.ChangedFile{{Name: "docs/index.md"}},
+			want:      "docs",
+			added:     []string{"docs"},
+			fileReads: 1,
+		},
+		{
+			name:      "invalid-title-falls-back-to-path",
+			action:    "opened",
+			title:     "Update guide",
+			files:     []model.ChangedFile{{Name: "docs/index.md"}},
+			want:      "docs",
+			added:     []string{"docs"},
+			fileReads: 1,
+		},
+		{
+			name:       "new-head-during-title-classification",
+			action:     "opened",
+			title:      "✨ Add feature",
+			added:      []string{"feature"},
+			changeHead: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			event := fixture()
+			event.Action = tc.action
+			event.PullRequest.Title = tc.title
+			event.PullRequest.Labels = tc.existing
+			if tc.explicit != "" {
+				event.Label = &model.Label{Name: tc.explicit}
+			}
+			fake := &fakeGitHub{
+				pr:         event.PullRequest,
+				config:     config,
+				files:      tc.files,
+				fileErr:    tc.fileErr,
+				changeHead: tc.changeHead,
+			}
+			if err := NewService(fake).ProcessEvent(context.Background(), event); err != nil {
+				t.Fatal(err)
+			}
+			state, description := "success", "Latest Changes label: "+tc.want
+			if tc.changeHead {
+				state, description = "", ""
+			}
+			if fake.status != state || fake.description != description {
+				t.Fatalf("got %q %q want %q %q", fake.status, fake.description, state, description)
+			}
+			if !slices.Equal(fake.added, tc.added) || !slices.Equal(fake.removed, tc.removed) {
+				t.Fatalf("added %v removed %v; want added %v removed %v", fake.added, fake.removed, tc.added, tc.removed)
+			}
+			if fake.fileReads != tc.fileReads {
+				t.Fatalf("got %d file requests want %d", fake.fileReads, tc.fileReads)
 			}
 		})
 	}

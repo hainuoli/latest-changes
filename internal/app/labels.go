@@ -47,6 +47,22 @@ func (s *Service) processLabelEvent(ctx context.Context, event model.Event, pr m
 
 func (s *Service) selectLabel(ctx context.Context, event model.Event, pr model.PullRequest,
 	c labels.Config) (string, error) {
+	var explicit string
+	if event.Action == "labeled" && event.Label != nil {
+		explicit = event.Label.Name
+	}
+
+	if c.LabelFromTitle {
+		// Existing categories take precedence so automatic classification cannot
+		// undo a maintainer's choice on later pushes or title edits.
+		if selected := labels.SelectLabel(pr.Labels, explicit, ""); selected != "" {
+			return selected, nil
+		}
+		if candidate := labels.LabelFromTitle(pr.Title); candidate != "" {
+			return candidate, nil
+		}
+	}
+
 	var candidate string
 	if event.Action == "opened" || event.Action == "synchronize" {
 		files, err := s.client.GetPullRequestFiles(ctx, event.Repository, pr)
@@ -57,11 +73,6 @@ func (s *Service) selectLabel(ctx context.Context, event model.Event, pr model.P
 		} else {
 			candidate = c.SelectCandidate(files)
 		}
-	}
-
-	var explicit string
-	if event.Action == "labeled" && event.Label != nil {
-		explicit = event.Label.Name
 	}
 
 	return labels.SelectLabel(pr.Labels, explicit, candidate), nil
