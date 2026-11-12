@@ -25,7 +25,6 @@ type fakeGitHub struct {
 	added       []string
 	removed     []string
 	writes      int
-	tokens      int
 	reads       int
 	conflict    bool
 	changeHead  bool
@@ -60,12 +59,7 @@ func fixture() model.Event {
 	}
 }
 
-func (f *fakeGitHub) CreateInstallationToken(context.Context, model.Repository, map[string]string) (string, error) {
-	f.tokens++
-	return "token", nil
-}
-
-func (f *fakeGitHub) GetPullRequest(context.Context, model.Repository, int, string) (model.PullRequest, error) {
+func (f *fakeGitHub) GetPullRequest(context.Context, model.Repository, int) (model.PullRequest, error) {
 	f.reads++
 	pr := f.pr
 	if f.changeHead && f.reads > 1 {
@@ -74,11 +68,11 @@ func (f *fakeGitHub) GetPullRequest(context.Context, model.Repository, int, stri
 	return pr, nil
 }
 
-func (f *fakeGitHub) GetPullRequestFiles(context.Context, model.Repository, model.PullRequest, string) ([]model.ChangedFile, error) {
+func (f *fakeGitHub) GetPullRequestFiles(context.Context, model.Repository, model.PullRequest) ([]model.ChangedFile, error) {
 	return f.files, f.fileErr
 }
 
-func (f *fakeGitHub) GetFile(_ context.Context, _ model.Repository, path, ref, token string) (*github.File, error) {
+func (f *fakeGitHub) GetFile(_ context.Context, _ model.Repository, path, ref string) (*github.File, error) {
 	content, sha := "", f.sha
 	if path == configPath {
 		content = f.config
@@ -99,22 +93,22 @@ func (f *fakeGitHub) GetFile(_ context.Context, _ model.Repository, path, ref, t
 	}, nil
 }
 
-func (f *fakeGitHub) AddLabel(_ context.Context, _ model.Repository, _ int, label, token string) error {
+func (f *fakeGitHub) AddLabel(_ context.Context, _ model.Repository, _ int, label string) error {
 	f.added = append(f.added, label)
 	return nil
 }
 
-func (f *fakeGitHub) RemoveLabel(_ context.Context, _ model.Repository, _ int, label, token string) error {
+func (f *fakeGitHub) RemoveLabel(_ context.Context, _ model.Repository, _ int, label string) error {
 	f.removed = append(f.removed, label)
 	return nil
 }
 
-func (f *fakeGitHub) SetStatus(_ context.Context, _ model.Repository, sha, state, description, token string) error {
+func (f *fakeGitHub) SetStatus(_ context.Context, _ model.Repository, sha, state, description string) error {
 	f.stateSHA, f.status, f.description = sha, state, description
 	return nil
 }
 
-func (f *fakeGitHub) UpdateFile(_ context.Context, _ model.Repository, path, sha, title, content, token string) error {
+func (f *fakeGitHub) UpdateFile(_ context.Context, _ model.Repository, path, sha, title, content string) error {
 	f.writes++
 	f.message = title
 	if f.conflict && f.writes == 1 {
@@ -278,8 +272,8 @@ func TestSkipReleaseAndUnmergedAndOtherBranch(t *testing.T) {
 			if fake.writes != 0 {
 				t.Fatal("unexpected write")
 			}
-			if mode != "release" && fake.tokens != 0 {
-				t.Fatal("unnecessary token")
+			if mode != "release" && fake.reads != 0 {
+				t.Fatal("unnecessary API read")
 			}
 		})
 	}

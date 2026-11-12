@@ -23,7 +23,7 @@ var notePaths = [...]string{
 	"CHANGELOG.md",
 }
 
-func (s *Service) processMergedEvent(ctx context.Context, repo model.Repository, pr model.PullRequest, token string) error {
+func (s *Service) processMergedEvent(ctx context.Context, repo model.Repository, pr model.PullRequest) error {
 	if !pr.Merged {
 		return nil
 	}
@@ -36,7 +36,7 @@ func (s *Service) processMergedEvent(ctx context.Context, repo model.Repository,
 		return nil
 	}
 
-	c, err := s.loadConfig(ctx, repo, token)
+	c, err := s.loadConfig(ctx, repo)
 	if err != nil {
 		return err
 	}
@@ -45,21 +45,16 @@ func (s *Service) processMergedEvent(ctx context.Context, repo model.Repository,
 		title = c.CommitTitle
 	}
 
-	writeToken, err := s.client.CreateInstallationToken(ctx, repo, github.ContentsPermissions)
-	if err != nil {
-		return err
-	}
-
-	return s.updateNotes(ctx, repo, pr, title, writeToken)
+	return s.updateNotes(ctx, repo, pr, title)
 }
 
-func (s *Service) updateNotes(ctx context.Context, repo model.Repository, pr model.PullRequest, title, token string) error {
+func (s *Service) updateNotes(ctx context.Context, repo model.Repository, pr model.PullRequest, title string) error {
 	if err := labels.ValidateCommitTitle(title); err != nil {
 		return err
 	}
 
 	for attempt := 0; attempt < maxUpdateAttempts; attempt++ {
-		file, err := s.findNotes(ctx, repo, token)
+		file, err := s.findNotes(ctx, repo)
 		if err != nil {
 			return err
 		}
@@ -84,7 +79,7 @@ func (s *Service) updateNotes(ctx context.Context, repo model.Repository, pr mod
 			return errors.New("updated release notes exceed size limit")
 		}
 
-		err = s.client.UpdateFile(ctx, repo, path, sha, title, updated, token)
+		err = s.client.UpdateFile(ctx, repo, path, sha, title, updated)
 		if err == nil {
 			return nil
 		}
@@ -97,9 +92,9 @@ func (s *Service) updateNotes(ctx context.Context, repo model.Repository, pr mod
 	return errors.New("release-note update conflicts exceeded retry limit")
 }
 
-func (s *Service) findNotes(ctx context.Context, repo model.Repository, token string) (*github.File, error) {
+func (s *Service) findNotes(ctx context.Context, repo model.Repository) (*github.File, error) {
 	for _, path := range notePaths {
-		file, err := s.client.GetFile(ctx, repo, path, repo.DefaultBranch, token)
+		file, err := s.client.GetFile(ctx, repo, path, repo.DefaultBranch)
 		if err != nil {
 			return nil, err
 		}

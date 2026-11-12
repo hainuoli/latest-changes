@@ -31,6 +31,7 @@ type (
 
 	PullRequest struct {
 		Number       int     `json:"number"`
+		State        string  `json:"state"`
 		Title        string  `json:"title"`
 		URL          string  `json:"html_url"`
 		Merged       bool    `json:"merged"`
@@ -41,7 +42,7 @@ type (
 		Head         Ref     `json:"head"`
 	}
 
-	// Repository identifies an installation-scoped GitHub repository.
+	// Repository identifies the GitHub repository managed by the workflow.
 
 	Repository struct {
 		ID            int64  `json:"id"`
@@ -49,7 +50,7 @@ type (
 		DefaultBranch string `json:"default_branch"`
 	}
 
-	// Event contains a pull-request webhook delivery.
+	// Event contains the pull-request data used by a workflow run.
 
 	Event struct {
 		Action      string      `json:"action"`
@@ -69,14 +70,22 @@ type (
 
 var repositoryName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
-func (r Repository) Validate() error {
-	if r.ID <= 0 || !repositoryName.MatchString(r.FullName) || r.DefaultBranch == "" {
-		return errors.New("invalid repository")
+// IsRepositoryName reports whether name identifies one owner and repository.
+func IsRepositoryName(name string) bool {
+	if !repositoryName.MatchString(name) {
+		return false
 	}
-	for _, part := range strings.Split(r.FullName, "/") {
+	for _, part := range strings.Split(name, "/") {
 		if part == "." || part == ".." {
-			return errors.New("invalid repository")
+			return false
 		}
+	}
+	return true
+}
+
+func (r Repository) Validate() error {
+	if r.ID <= 0 || !IsRepositoryName(r.FullName) || r.DefaultBranch == "" {
+		return errors.New("invalid repository")
 	}
 	return nil
 }

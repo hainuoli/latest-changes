@@ -23,10 +23,25 @@ type File struct {
 	Content  string `json:"content"`
 }
 
+// GetRepository resolves the workflow repository and its current default branch.
+func (c *Client) GetRepository(ctx context.Context, fullName string) (model.Repository, error) {
+	if !model.IsRepositoryName(fullName) {
+		return model.Repository{}, errors.New("invalid repository name")
+	}
+	var repo model.Repository
+	if err := c.request(ctx, "GET", "/repos/"+fullName, nil, &repo); err != nil {
+		return repo, err
+	}
+	if !strings.EqualFold(repo.FullName, fullName) {
+		return repo, errors.New("unexpected repository response")
+	}
+	return repo, repo.Validate()
+}
+
 // GetFile reads a file at the given ref, returning nil when it does not exist.
-func (c *Client) GetFile(ctx context.Context, repo model.Repository, path, ref, token string) (*File, error) {
+func (c *Client) GetFile(ctx context.Context, repo model.Repository, path, ref string) (*File, error) {
 	var file File
-	err := c.request(ctx, "GET", repoPath(repo)+"/contents/"+escapePath(path)+"?ref="+url.QueryEscape(ref), token, nil, &file)
+	err := c.request(ctx, "GET", repoPath(repo)+"/contents/"+escapePath(path)+"?ref="+url.QueryEscape(ref), nil, &file)
 	if HasStatus(err, http.StatusNotFound) {
 		return nil, nil
 	}
@@ -40,7 +55,7 @@ func (c *Client) GetFile(ctx context.Context, repo model.Repository, path, ref, 
 }
 
 // UpdateFile writes release notes using the expected blob SHA.
-func (c *Client) UpdateFile(ctx context.Context, repo model.Repository, path, sha, title, content, token string) error {
+func (c *Client) UpdateFile(ctx context.Context, repo model.Repository, path, sha, title, content string) error {
 	payload := map[string]string{
 		"message": title,
 		"content": base64.StdEncoding.EncodeToString([]byte(content)),
@@ -49,7 +64,7 @@ func (c *Client) UpdateFile(ctx context.Context, repo model.Repository, path, sh
 	if sha != "" {
 		payload["sha"] = sha
 	}
-	return c.request(ctx, "PUT", repoPath(repo)+"/contents/"+escapePath(path), token, payload, nil)
+	return c.request(ctx, "PUT", repoPath(repo)+"/contents/"+escapePath(path), payload, nil)
 }
 
 // Decode validates and decodes the bounded UTF-8 file contents.

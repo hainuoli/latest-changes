@@ -9,21 +9,21 @@ import (
 	"github.com/hainuoli/latest-changes/internal/notes"
 )
 
-func (s *Service) processLabelEvent(ctx context.Context, event model.Event, pr model.PullRequest, token string) error {
+func (s *Service) processLabelEvent(ctx context.Context, event model.Event, pr model.PullRequest) error {
 	repo := event.Repository
-	c, err := s.loadConfig(ctx, repo, token)
+	c, err := s.loadConfig(ctx, repo)
 	if err != nil {
 		return s.client.SetStatus(ctx, repo, pr.Head.SHA, "failure",
-			"Invalid or unavailable .github/latest-changes.yml configuration", token)
+			"Invalid or unavailable .github/latest-changes.yml configuration")
 	}
 
 	state, description := notes.ClassifyLabels(pr.Labels)
 	if c != nil {
-		selected, err := s.selectLabel(ctx, event, pr, *c, token)
+		selected, err := s.selectLabel(ctx, event, pr, *c)
 		if err != nil {
-			return s.client.SetStatus(ctx, repo, pr.Head.SHA, "failure", err.Error(), token)
+			return s.client.SetStatus(ctx, repo, pr.Head.SHA, "failure", err.Error())
 		}
-		if err := s.applyLabel(ctx, repo, pr, selected, token); err != nil {
+		if err := s.applyLabel(ctx, repo, pr, selected); err != nil {
 			return err
 		}
 
@@ -34,7 +34,7 @@ func (s *Service) processLabelEvent(ctx context.Context, event model.Event, pr m
 	}
 
 	// A newer push has its own delivery. Its status must use its own file list.
-	latest, err := s.client.GetPullRequest(ctx, repo, pr.Number, token)
+	latest, err := s.client.GetPullRequest(ctx, repo, pr.Number)
 	if err != nil {
 		return err
 	}
@@ -42,14 +42,14 @@ func (s *Service) processLabelEvent(ctx context.Context, event model.Event, pr m
 		return nil
 	}
 
-	return s.client.SetStatus(ctx, repo, pr.Head.SHA, state, description, token)
+	return s.client.SetStatus(ctx, repo, pr.Head.SHA, state, description)
 }
 
 func (s *Service) selectLabel(ctx context.Context, event model.Event, pr model.PullRequest,
-	c labels.Config, token string) (string, error) {
+	c labels.Config) (string, error) {
 	var candidate string
 	if event.Action == "opened" || event.Action == "synchronize" {
-		files, err := s.client.GetPullRequestFiles(ctx, event.Repository, pr, token)
+		files, err := s.client.GetPullRequestFiles(ctx, event.Repository, pr)
 		if err != nil {
 			if len(notes.RecognizedLabels(pr.Labels)) == 0 {
 				return "", errors.New("could not determine an automatic label")
@@ -68,9 +68,9 @@ func (s *Service) selectLabel(ctx context.Context, event model.Event, pr model.P
 }
 
 func (s *Service) applyLabel(ctx context.Context, repo model.Repository, pr model.PullRequest,
-	selected, token string) error {
+	selected string) error {
 	if selected != "" && !hasLabel(pr.Labels, selected) {
-		if err := s.client.AddLabel(ctx, repo, pr.Number, selected, token); err != nil {
+		if err := s.client.AddLabel(ctx, repo, pr.Number, selected); err != nil {
 			return err
 		}
 	}
@@ -79,7 +79,7 @@ func (s *Service) applyLabel(ctx context.Context, repo model.Repository, pr mode
 		if label == selected {
 			continue
 		}
-		if err := s.client.RemoveLabel(ctx, repo, pr.Number, label, token); err != nil {
+		if err := s.client.RemoveLabel(ctx, repo, pr.Number, label); err != nil {
 			return err
 		}
 	}

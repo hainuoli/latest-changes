@@ -1,54 +1,64 @@
 # Latest Changes
 
-A self-hosted GitHub App written in Go. It classifies pull requests, reports
-`latest-changes/label`, and updates release notes after merges. Automated
-release-note commits contain a single Gitmoji title with no body.
+A GitHub Action written in Go. It classifies pull requests, reports
+`latest-changes/label`, and updates release notes after merges. Release-note
+commits contain a single Gitmoji title with no body, trailers, or `[skip ci]`.
+No server, webhook, App registration, private key, or personal access token is
+required. The default identity is `github-actions[bot]`.
 
-This implementation adapts the behavior of
+The behavior is adapted from
 [tiangolo/latest-changes-app](https://github.com/tiangolo/latest-changes-app).
 The original MIT notice and pinned source snapshot are retained; see
-[UPSTREAM.md](UPSTREAM.md). The application runs entirely in Go.
+[UPSTREAM.md](UPSTREAM.md). Only the Go implementation is executed.
 
-## Run
+## Use
 
-Requires Go 1.23 or newer and a GitHub App installation. Build the server:
+Publish this repository, then copy [examples/latest-changes.yml](examples/latest-changes.yml)
+to `.github/workflows/latest-changes.yml` in the target repository. Replace
+`hainuoli/latest-changes@main` with a reviewed full commit SHA before production use.
+The action builds its own source with Go on the runner. A checkout of the target
+repository is unnecessary.
 
-```sh
-go build -trimpath -o bin/latest-changes ./cmd/latest-changes
+The workflow listens to `pull_request_target` for opened, edited, synchronize,
+reopened, labeled, unlabeled, and closed events. This supports contributions
+from forks while running trusted action code. It reads PR metadata and changed
+paths through the API; it never checks out or executes PR code. Keep it separate
+from workflows that build or test contributions, and never add a PR-head checkout
+to this privileged job.
+
+Grant only these repository permissions in the calling workflow:
+
+```yaml
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
 ```
 
-Configure the environment before starting it:
+Pass `${{ secrets.GITHUB_TOKEN }}` to the action's `token` input. GitHub provides
+and expires this token for each job; no repository secret needs to be created.
+Standard GitHub-hosted runners are free for public repositories. Private
+repository usage is subject to the account's Actions allowance and billing.
 
-```sh
-export GITHUB_CLIENT_ID='your-app-client-id'
-export GITHUB_APP_PRIVATE_KEY_FILE='/absolute/path/to/app.pem'
-export GITHUB_WEBHOOK_SECRET='your-random-webhook-secret'
-export DATA_DIR='/absolute/path/to/persistent-data'
-export LISTEN_ADDR='127.0.0.1:8080'
-./bin/latest-changes
-```
+The example serializes runs for the repository with `queue: max`, preserving up
+to 100 pending runs rather than replacing pending merge events. Runs already
+in progress are not canceled. GitHub's queue limits still apply. If a run fails
+or is canceled, rerun it in Actions, or use **Run workflow** and enter its PR
+number. Recovery re-reads the current PR: open PRs are classified again, merged
+PRs update notes, and closed unmerged PRs are skipped.
 
-`GITHUB_APP_PRIVATE_KEY` can supply the PEM directly instead of a file. Set only
-one private-key source. Environment files are examples, not automatically loaded.
-`LISTEN_ADDR` defaults to `:8080`; `DATA_DIR` defaults to `./data`.
-`GET /health` checks the running HTTP service.
+`latest-changes/label` is the required classification status; the workflow job's
+completion alone does not mean a category has been selected. Require this status
+from GitHub Actions only after a successful demo. `GITHUB_TOKEN` cannot bypass
+branch rules that prohibit direct file updates. If your default branch requires
+all changes to go through PRs, this direct-write version needs a separately
+approved authentication or PR-based update design; do not weaken protection as
+part of setup.
 
-Put the HTTP service behind HTTPS. Register `/webhooks/github` as the App's
-webhook URL, configure the same webhook secret, and subscribe to Pull request
-events. Grant these repository permissions:
-
-| Permission | Access |
-| --- | --- |
-| Contents | Read and write |
-| Pull requests | Read and write |
-| Commit statuses | Read and write |
-| Metadata | Read |
-
-Install the App on the intended repositories. Installation tokens are checked
-to cover exactly one target repository and the requested permissions. If a
-ruleset prevents direct release-note writes, allow this App to bypass it.
-Require `latest-changes/label` from this App only after verifying a test PR.
-Remove the old App when switching; two Apps should not manage the same notes.
+Disable the old Latest Changes App for the target repository before enabling
+this workflow, so only one implementation manages its labels and release notes.
+Remove its old ruleset bypass and status source when completing the migration.
+Keep the shared path-rule configuration below.
 
 ## Repository configuration
 
@@ -80,10 +90,10 @@ rejected. No body, trailers, or `[skip ci]` is added. The supported emoji are
 ✨ 🐛 💥 🔒 📝 ✏ 🌐 ⬆ ⬇ ♻ 🎨 ⚡ 🔥 👷 🔧 🔨 🚨 ✅ 🔖 🎉 📄 🙈,
 with an optional trailing variation selector.
 
-The official hosted App does not support `commit-title`; switch App identities
+The official hosted App does not support `commit-title`; disable the old App
 before adding it. A configuration file must contain an `auto-labels` mapping;
 use `auto-labels: {}` for manual classification. With no configuration file,
-the App checks manual labels and uses the default commit title.
+the action checks manual labels and uses the default commit title.
 
 Path rules match repository-relative POSIX paths, including recursive `**`.
 Rules are ordered; the first matching rule for a label wins. For example:
@@ -119,12 +129,12 @@ Supported categories in precedence and output order:
 The `release` label skips the release-note update and is mutually exclusive
 with category labels. Without automatic-label configuration, zero category
 labels produce a pending status and multiple labels produce failure. With
-configuration, the App selects and normalizes one category.
+configuration, the action selects and normalizes one category.
 
 Unlike the upstream Python application, this version does **not** semantically
 classify dependency changes inside `pyproject.toml`. It can still classify that
 file through an explicit path rule. The upstream release-preparation Python
-CLI and OpenAPI documentation UI are not part of this server.
+CLI and OpenAPI documentation UI are not part of this action.
 
 ## Release notes
 
@@ -142,46 +152,54 @@ tested against golden outputs generated from the pinned upstream implementation.
 Repeated delivery does not duplicate an existing entry; conflicting file writes
 re-read the document and retry up to three times.
 
-Since commits do not include `[skip ci]`, they can trigger push workflows. If
-needed, filter only the relevant workflows' `push` event for changes exclusively
-to the notes file. Keep required PR checks running; PR path filters can leave
-required checks pending.
+## Execution and recovery
 
-## Delivery and operations
+The process reads `GITHUB_EVENT_PATH`, verifies that its repository name and ID
+match `GITHUB_REPOSITORY` and the API, refreshes the PR, and handles one event.
+Configuration is read from the current default branch. PR titles, branch names,
+and file contents are treated as data, not interpolated into shell scripts.
+The run has a 90-second processing deadline; each API request has a five-second
+timeout. Operational errors produce a nonzero exit code and appear in Actions. There is
+no local queue or persistent service to maintain.
 
-Signed, valid pull-request events are written to disk before HTTP `202` is
-returned. A single worker processes events, with a 90-second processing deadline
-and five attempts using exponential backoff. GitHub API requests have a separate
-five-second timeout. Pending work survives server restarts. Repeated delivery IDs
-are deduplicated, and completed records are retained for seven days. Content
-idempotency still protects release notes after that retention period.
+The default `GITHUB_TOKEN` does not trigger new push workflows for release-note
+commits, so `[skip ci]` is unnecessary. Label changes made with this token also
+do not start additional labeled/unlabeled workflow runs; the action computes
+the final classification status in the same run. An optional custom `token`
+may change these triggering behaviors and must have the same permissions.
 
-The default queue holds up to 1,000 pending jobs. A persistence or capacity error
-returns `503`, not success. Exhausted tasks remain on disk with `failed: true`
-and are logged. Inspect and fix the cause, then manually redeliver from GitHub's
-App delivery page; the same failed delivery ID can be retried. There is no
-automatic polling of GitHub for deliveries missed while the server was down.
-
-Run **one process with one persistent local data directory**. Do not share the
-spool between replicas or place it on an ephemeral filesystem. File and directory
-syncs are used before acknowledging writes; storage durability still depends on
-the host filesystem. Failed records require operator cleanup after resolution.
-The health endpoint reports process health, not an empty failure backlog.
+Existing release notes and SHA-conflict retries make reruns idempotent. A
+canceled, failed, or queue-rejected run must be rerun manually; this action does
+not poll for missed events. The provided `workflow_dispatch` input is the
+recovery mechanism.
 
 ## Development
+
+Requires Go 1.23 or newer. The composite action sets up the stable Go release.
 
 ```sh
 go mod verify
 go vet ./...
 go test -race -count=1 ./...
-go build ./...
+go build -trimpath -o bin/latest-changes ./cmd/latest-changes
 ```
 
-Tests use local mock GitHub servers and temporary queues; no live GitHub writes
-or App credentials are needed. Production dependencies are limited to YAML
-parsing and recursive path matching. Authentication and HTTP use the Go standard
-library.
+For local execution, set `GITHUB_TOKEN`, `GITHUB_REPOSITORY`,
+`GITHUB_EVENT_NAME`, and `GITHUB_EVENT_PATH` to a saved event JSON file.
+Supported events are `pull_request`, `pull_request_target`, and
+`workflow_dispatch`; the last also requires `LATEST_CHANGES_PULL_REQUEST`.
+Local execution with a real token can write to GitHub. Tests use only local
+mock servers and temporary event files and do not require live credentials.
 
-Before every agent-created commit, review the changes, test results, and exact
-proposed single-line Gitmoji title. Explicit approval is required for each
-commit, as described in [AGENTS.md](AGENTS.md).
+Tests cover the Actions-to-mock-GitHub flow, recovery, repository identity
+checks, label selection, current-head statuses, file pagination, conflicts,
+reruns, and title-only commits. Rendering is checked against 14 upstream golden
+outputs. Production dependencies are limited to YAML parsing and recursive
+path matching. HTTP and JSON use the Go standard library.
+
+Agent-created commits require individual approval and a single-line Gitmoji
+message, as described in [AGENTS.md](AGENTS.md).
+
+References: [token-triggered events](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow),
+[workflow concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+and [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).

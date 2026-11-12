@@ -12,8 +12,8 @@ const (
 	maxConfigSize = 100_000
 )
 
-func (s *Service) loadConfig(ctx context.Context, repo model.Repository, token string) (*labels.Config, error) {
-	file, err := s.client.GetFile(ctx, repo, configPath, repo.DefaultBranch, token)
+func (s *Service) loadConfig(ctx context.Context, repo model.Repository) (*labels.Config, error) {
+	file, err := s.client.GetFile(ctx, repo, configPath, repo.DefaultBranch)
 	if err != nil || file == nil {
 		return nil, err
 	}

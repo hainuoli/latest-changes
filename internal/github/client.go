@@ -3,7 +3,6 @@ package github
 import (
 	"bytes"
 	"context"
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,12 +24,11 @@ const (
 )
 
 type (
-	// Client calls the GitHub API using App and installation credentials.
+	// Client calls the GitHub API with a repository-scoped workflow token.
 	Client struct {
 		baseURL    string
 		httpClient *http.Client
-		clientID   string
-		key        *rsa.PrivateKey
+		token      string
 	}
 
 	// ClientOption customizes a Client before it is used.
@@ -42,20 +40,14 @@ type (
 	}
 )
 
-// NewClient creates a GitHub client with an RSA App private key.
-func NewClient(clientID, privateKey string, opts ...ClientOption) (*Client, error) {
-	if strings.TrimSpace(clientID) == "" {
-		return nil, errors.New("missing GitHub App client ID")
+// NewClient creates a GitHub client using a token supplied by GitHub Actions.
+func NewClient(token string, opts ...ClientOption) (*Client, error) {
+	if strings.TrimSpace(token) == "" || strings.ContainsAny(token, " \t\r\n") {
+		return nil, errors.New("missing or invalid GitHub token")
 	}
-	key, err := parsePrivateKey(privateKey)
-	if err != nil {
-		return nil, err
-	}
-
 	client := &Client{
-		baseURL:  defaultBaseURL,
-		clientID: clientID,
-		key:      key,
+		baseURL: defaultBaseURL,
+		token:   token,
 	}
 	for _, opt := range opts {
 		if opt == nil {
@@ -109,7 +101,7 @@ func HasStatus(err error, code int) bool {
 	return errors.As(err, &api) && api.StatusCode == code
 }
 
-func (c *Client) request(ctx context.Context, method, endpoint, token string, payload, output any) error {
+func (c *Client) request(ctx context.Context, method, endpoint string, payload, output any) error {
 	var body io.Reader
 	if payload != nil {
 		data, err := json.Marshal(payload)
@@ -122,7 +114,7 @@ func (c *Client) request(ctx context.Context, method, endpoint, token string, pa
 	if err != nil {
 		return errors.New("invalid GitHub API request")
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", apiVersion)
 	req.Header.Set("User-Agent", userAgent)
